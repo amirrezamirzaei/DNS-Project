@@ -3,7 +3,26 @@ from _thread import start_new_thread
 import json
 from shared_utils import receive_message, IP_SERVER, PORT_SERVER, send_message
 
-clients = {'amir': 0}
+clients = {'admin': ()}
+
+
+def handle_signup(message, client_socket, sym_key):
+    if message['username'] in clients:
+        send_message(client_socket, 'username already exist.', encrypt=True, symmetric=True, sym_key=sym_key)
+    else:
+        send_message(client_socket, 'username does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
+
+
+def handle_assing_password(message, client_socket, sym_key):
+    if message['username'] in clients:
+        send_message(client_socket, 'username already exist.', encrypt=True, symmetric=True, sym_key=sym_key)
+        return
+    username = message['username']
+    password = message['password']
+
+    clients[username] = (None, password)
+
+    send_message(client_socket, 'signup successful.', encrypt=True, symmetric=True, sym_key=sym_key)
 
 
 def handle_client(client_socket, client_address):
@@ -14,31 +33,18 @@ def handle_client(client_socket, client_address):
     client_socket.setblocking(True)
     sym_key = receive_message(client_socket, decrypt=True, key_path='private.pem')
     print(sym_key)
+
     while True:
         client_socket.setblocking(True)
         message = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=sym_key)
-        print(message)
         if message:
             print(message)
             message = json.loads(message.replace("'", '"'))
 
             if message['api'] == 'signup_username':
-                if message['username'] in clients:
-                    send_message(client_socket, 'username already exist.', encrypt=True, symmetric=True, sym_key=sym_key)
-                    continue
-                else:
-                    send_message(client_socket, 'username does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
-
+                handle_signup(message, client_socket, sym_key)
             elif message['api'] == 'assign_password':
-                if message['username'] in clients:
-                    send_message(client_socket, 'username already exist.', encrypt=True, symmetric=True, sym_key=sym_key)
-                    continue
-                username = message['username']
-                password = message['password']
-
-                clients[username] = (None, password)
-
-                send_message(client_socket, 'signup successful.', encrypt=True, symmetric=True, sym_key=sym_key)
+                handle_assing_password(message, client_socket, sym_key)
 
 
 def main():

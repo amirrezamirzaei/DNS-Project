@@ -1,11 +1,9 @@
 import socket
 import _thread
-import json
 import hashlib
 from termcolor import colored
 from cryptography.fernet import Fernet
 from shared_utils import IP_SERVER, PORT_SERVER, receive_message, send_message
-from cryptography.hazmat.primitives import hashes
 
 LISTEN = True
 SYMMETRIC_KEY = None
