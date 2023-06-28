@@ -1,9 +1,11 @@
 import socket
 import _thread
 import json
+import hashlib
 from termcolor import colored
 from cryptography.fernet import Fernet
 from shared_utils import IP_SERVER, PORT_SERVER, receive_message, send_message
+from cryptography.hazmat.primitives import hashes
 
 LISTEN = True
 SYMMETRIC_KEY = None
@@ -28,12 +30,15 @@ def handle_signup(client_socket):
     client_socket.setblocking(True)
     server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
 
-    print(server_response)
     if server_response == 'username already exist.':
         print(colored('a user with this username already exists.', 'red'))
         return
     elif server_response == 'username does not exist.':
         password = input('please enter a password:')
+        hash = hashlib.sha256()
+        hash.update(bytes(password.encode('utf-8')))
+        password = hash.hexdigest()
+
         message = {'api': 'assign_password', 'username': username, 'password': password}
         send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
 

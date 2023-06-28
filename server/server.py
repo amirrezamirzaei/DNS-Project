@@ -13,10 +13,11 @@ def handle_client(client_socket, client_address):
     # get symmetric key from client
     client_socket.setblocking(True)
     sym_key = receive_message(client_socket, decrypt=True, key_path='private.pem')
-
+    print(sym_key)
     while True:
         client_socket.setblocking(True)
         message = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=sym_key)
+        print(message)
         if message:
             print(message)
             message = json.loads(message.replace("'", '"'))
