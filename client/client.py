@@ -8,6 +8,7 @@ from shared_utils import IP_SERVER, PORT_SERVER, receive_message, send_message
 LISTEN = True
 SYMMETRIC_KEY = None
 PUBLIC_KEY_SERVER = '../public.pem'
+USERNAME = ''
 
 
 def listen_for_message(recv_socket):
@@ -47,6 +48,39 @@ def handle_signup(client_socket):
             print(colored('a user with this username already exists.', 'red'))
 
 
+def handle_login(client_socket):
+    global LISTEN
+    global USERNAME
+
+    username = input('enter your username:')
+    password = input('enter your password:')
+    hash = hashlib.sha256()
+    hash.update(bytes(password.encode('utf-8')))
+    password = hash.hexdigest()
+    message = {'api': 'login', 'username': username, 'password': password}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+    if server_response == 'username does not exist.' or server_response == 'password does not match username.':
+        print(colored(server_response, 'red'))
+    elif server_response == 'login successful.':
+        print(colored(f'{server_response} Welcome', 'green'), colored(f'{username}!', 'yellow'))
+        USERNAME = username
+
+
+def handle_logout(client_socket):
+    global USERNAME
+    if len(USERNAME) == 0:
+        print(colored('you are not signed in!', 'red'))
+    message = {'api': 'logout', 'username': USERNAME}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    print(colored('goodbye', 'green'), colored(f'{USERNAME}!', 'yellow'))
+    USERNAME = ''
+
+
 def main():
     global LISTEN
     global SYMMETRIC_KEY
@@ -65,7 +99,7 @@ def main():
 
     _thread.start_new_thread(listen_for_message, (client_socket,))
 
-    CLI = colored('1-create account\n2-sign in\n', 'blue')
+    CLI = colored('1-create account\n2-login\n3-logout\n', 'blue')
 
     while True:
         command = int(input(CLI))
@@ -76,8 +110,11 @@ def main():
             LISTEN = True
 
         elif command == 2:  # sign up
-            print('accc')
-            print(2)
+            LISTEN = False
+            handle_login(client_socket)
+            LISTEN = True
+        elif command == 3:
+            handle_logout(client_socket)
 
 
 if __name__ == "__main__":
