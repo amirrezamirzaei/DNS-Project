@@ -9,7 +9,8 @@ def receive_message(socket):
         if not len(message_header):
             return False
         message_length = int(message_header.decode('utf-8').strip())
-        return socket.recv(message_length)
+        message = socket.recv(message_length)
+        return message.decode('utf-8')
     except:
         return False
 

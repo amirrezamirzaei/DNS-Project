@@ -1,19 +1,37 @@
 import socket
 from _thread import start_new_thread
-
+import json
 from shared_utils import receive_message, IP_SERVER, PORT_SERVER, send_message
 
-clients = []
+clients = {'amir': 0}
 
 
 def handle_client(client_socket, client_address):
-    clients.append(client_socket)
-    print(clients)
+    global clients
     while True:
+        client_socket.setblocking(True)
         message = receive_message(client_socket)
         if message:
             print(message)
-            send_message(client_socket, 'dge inja peygham nade.')
+            message = json.loads(message.replace("'", '"'))
+
+            if message['api'] == 'signup_username':
+                if message['username'] in clients:
+                    send_message(client_socket, 'username already exist.')
+                    continue
+                else:
+                    send_message(client_socket, 'username does not exist.')
+
+            elif message['api'] == 'assign_password':
+                if message['username'] in clients:
+                    send_message(client_socket, 'username already exist.')
+                    continue
+                username = message['username']
+                password = message['password']
+
+                clients[username] = (None, password)
+
+                send_message(client_socket, 'signup successful.')
 
 
 def main():
