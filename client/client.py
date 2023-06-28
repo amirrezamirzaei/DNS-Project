@@ -21,7 +21,6 @@ def listen_for_message(recv_socket):
 
 
 def handle_signup(client_socket):
-    global LISTEN
     username = input('enter your desired username:')
     message = {'api': 'signup_username', 'username': username}
     send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
@@ -81,6 +80,14 @@ def handle_logout(client_socket):
     USERNAME = ''
 
 
+def handle_show_online_users(client_socket):
+    message = {'api': 'show_online_users'}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+    print(colored(server_response, 'magenta'))
+
+
 def main():
     global LISTEN
     global SYMMETRIC_KEY
@@ -92,17 +99,18 @@ def main():
         print('connection refused')
         exit()
     print('connection established.')
-
+    client_socket.setblocking(True)
     # generate symmetric key for server
     SYMMETRIC_KEY = Fernet.generate_key()
     send_message(client_socket, SYMMETRIC_KEY, symmetric=False, encrypt=True, key_path=PUBLIC_KEY_SERVER)
 
     _thread.start_new_thread(listen_for_message, (client_socket,))
 
-    CLI = colored('1-create account\n2-login\n3-logout\n', 'blue')
+    CLI = colored('1-create account\n2-login\n3-logout\n4-show online users\n', 'blue')
 
     while True:
-        command = int(input(CLI))
+        print(CLI)
+        command = int(input(colored(f'{USERNAME}>', 'yellow')))
 
         if command == 1:  # create account
             LISTEN = False
@@ -115,6 +123,10 @@ def main():
             LISTEN = True
         elif command == 3:
             handle_logout(client_socket)
+        elif command == 4:
+            LISTEN = False
+            handle_show_online_users(client_socket)
+            LISTEN = True
 
 
 if __name__ == "__main__":

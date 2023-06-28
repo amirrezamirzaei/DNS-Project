@@ -27,7 +27,7 @@ def handle_assign_password(message, client_socket, sym_key):
 
 
 def handle_login(message, client_socket, sym_key):
-    print(clients)
+    global clients
     if message['username'] not in clients:
         send_message(client_socket, 'username does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
     elif clients[message['username']]['password'] != message['password']:
@@ -40,6 +40,16 @@ def handle_login(message, client_socket, sym_key):
 def handle_logout(message, client_socket, sym_key):
     if message['username'] in clients and clients[message['username']]['socket'] == client_socket:
         clients[message['username']]['socket'] = None
+
+
+def show_online_users(message, client_socket, sym_key):
+    global clients
+    response = ''
+    for client, info in clients.items():
+        if info['socket']:
+            response += client + ' '
+
+    send_message(client_socket, response, encrypt=True, symmetric=True, sym_key=sym_key)
 
 
 def handle_client(client_socket, client_address):
@@ -66,6 +76,8 @@ def handle_client(client_socket, client_address):
                 handle_login(message, client_socket, sym_key)
             elif message['api'] == 'logout':
                 handle_logout(message, client_socket, sym_key)
+            elif message['api'] == 'show_online_users':
+                show_online_users(message, client_socket, sym_key)
 
 
 def main():
