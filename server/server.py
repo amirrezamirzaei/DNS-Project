@@ -8,30 +8,36 @@ clients = {'amir': 0}
 
 def handle_client(client_socket, client_address):
     global clients
+    sym_key = None
+
+    # get symmetric key from client
+    client_socket.setblocking(True)
+    sym_key = receive_message(client_socket, decrypt=True, key_path='private.pem')
+
     while True:
         client_socket.setblocking(True)
-        message = receive_message(client_socket)
+        message = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=sym_key)
         if message:
             print(message)
             message = json.loads(message.replace("'", '"'))
 
             if message['api'] == 'signup_username':
                 if message['username'] in clients:
-                    send_message(client_socket, 'username already exist.')
+                    send_message(client_socket, 'username already exist.', encrypt=True, symmetric=True, sym_key=sym_key)
                     continue
                 else:
-                    send_message(client_socket, 'username does not exist.')
+                    send_message(client_socket, 'username does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
 
             elif message['api'] == 'assign_password':
                 if message['username'] in clients:
-                    send_message(client_socket, 'username already exist.')
+                    send_message(client_socket, 'username already exist.', encrypt=True, symmetric=True, sym_key=sym_key)
                     continue
                 username = message['username']
                 password = message['password']
 
                 clients[username] = (None, password)
 
-                send_message(client_socket, 'signup successful.')
+                send_message(client_socket, 'signup successful.', encrypt=True, symmetric=True, sym_key=sym_key)
 
 
 def main():
