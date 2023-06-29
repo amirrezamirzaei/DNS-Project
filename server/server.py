@@ -2,6 +2,9 @@ import socket
 from _thread import start_new_thread
 import json
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.backends.openssl import dh
+
 from shared_utils import receive_message, IP_SERVER, PORT_SERVER, send_message
 
 clients = {}
@@ -35,14 +38,16 @@ def handle_login(message, client_socket, sym_key):
     else:
         send_message(client_socket, 'login successful.', encrypt=True, symmetric=True, sym_key=sym_key)
         clients[message['username']]['socket'] = client_socket
+        clients[message['username']]['key'] = sym_key
 
 
 def handle_logout(message, client_socket, sym_key):
     if message['username'] in clients and clients[message['username']]['socket'] == client_socket:
         clients[message['username']]['socket'] = None
+        clients[message['username']]['key'] = None
 
 
-def show_online_users(message, client_socket, sym_key):
+def handle_show_online_users(message, client_socket, sym_key):
     global clients
     response = ''
     for client, info in clients.items():
@@ -52,18 +57,41 @@ def show_online_users(message, client_socket, sym_key):
     send_message(client_socket, response, encrypt=True, symmetric=True, sym_key=sym_key)
 
 
+def handle_key_exchange_with_another_client(message, client_socket, sym_key):
+    print('salam')
+    if message['sender'] not in clients or clients[message['sender']]['socket'] != client_socket:
+        send_message(client_socket, 'you are not logged in.', encrypt=True, symmetric=True, sym_key=sym_key)
+        return
+    if message['receiver'] not in clients:
+        send_message(client_socket, 'username does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
+        return
+    elif not message['receiver']['socket']:
+        send_message(client_socket, 'user not online.', encrypt=True, symmetric=True, sym_key=sym_key)
+        return
+
+    parameters = dh.generate_parameters(generator=2, key_size=512, backend=default_backend())
+    p = parameters.parameter_numbers().p
+    g = parameters.parameter_numbers().g
+
+    message = {'api': 'exchange', 'username': message['receiver'], 'p': p, 'g': g}
+    send_message(client_socket, message, encrypt=True, symmetric=True, sym_key=sym_key)
+
+    message = {'api': 'exchange', 'username': message['sender'], 'p': p, 'g': g}
+    send_message(clients[message['receiver']]['socket'], message, encrypt=True, symmetric=True, sym_key=sym_key)
+
+
 def handle_client(client_socket, client_address):
     global clients
-    sym_key = None
 
     # get symmetric key from client
     client_socket.setblocking(True)
-    sym_key = receive_message(client_socket, decrypt=True, key_path='private.pem')
+    sym_key = receive_message(client_socket, print_before_decrypt=True, decrypt=True, key_path='private.pem')
     print(sym_key)
 
     while True:
         client_socket.setblocking(True)
-        message = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=sym_key)
+        message = receive_message(client_socket, print_before_decrypt=True, decrypt=True, symmetric=True,
+                                  sym_key=sym_key)
         if message:
             print(message)
             message = json.loads(message.replace("'", '"'))
@@ -77,7 +105,9 @@ def handle_client(client_socket, client_address):
             elif message['api'] == 'logout':
                 handle_logout(message, client_socket, sym_key)
             elif message['api'] == 'show_online_users':
-                show_online_users(message, client_socket, sym_key)
+                handle_show_online_users(message, client_socket, sym_key)
+            elif message['api'] == 'key_exchange_with_another_client':
+                handle_key_exchange_with_another_client(message, client_socket, sym_key)
 
 
 def main():

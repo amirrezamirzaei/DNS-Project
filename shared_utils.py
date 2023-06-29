@@ -43,15 +43,16 @@ def decode_RSA(message, key_path):
     return ciphertext
 
 
-def receive_message(socket, decrypt=False, key_path='', symmetric=False, sym_key=''):
-    if not decrypt:
-        2 / 0
+def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key=''):
     try:
         message_header = socket.recv(HEADER_LENGTH)
         if not len(message_header):
             return False
         message_length = int(message_header.decode('utf-8').strip())
         message = socket.recv(message_length)
+
+        if print_before_decrypt:
+            print(message)
 
         if decrypt and not symmetric:
             message = decode_RSA(message, key_path)
@@ -65,8 +66,6 @@ def receive_message(socket, decrypt=False, key_path='', symmetric=False, sym_key
 
 
 def send_message(socket, message, encrypt=False, key_path='', symmetric=False, sym_key=''):
-    if not encrypt:
-        2/0
     if encrypt and not symmetric:
         message = encrypt_with_public_key(message, key_path)
     else:

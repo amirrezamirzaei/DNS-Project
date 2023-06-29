@@ -9,6 +9,7 @@ LISTEN = True
 SYMMETRIC_KEY = None
 PUBLIC_KEY_SERVER = '../public.pem'
 USERNAME = ''
+CLIENT_KEYS = {}
 
 
 def listen_for_message(recv_socket):
@@ -88,6 +89,28 @@ def handle_show_online_users(client_socket):
     print(colored(server_response, 'magenta'))
 
 
+def handle_send_message(client_socket):
+    print('enter username of the receiver:')
+    receiver = input(colored(f'{USERNAME}>', 'yellow'))
+    print('enter message:')
+    pm = input(colored(f'{USERNAME}>', 'yellow'))
+
+    message = {'api': 'key_exchange_with_another_client', 'sender': USERNAME, 'receiver': receiver}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+    if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
+            or 'user not online.':
+        print(colored(server_response, 'red'))
+        return
+
+    # server response will be public diffie hellman parameters
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+    print(server_response)
+
+
 def main():
     global LISTEN
     global SYMMETRIC_KEY
@@ -106,7 +129,7 @@ def main():
 
     _thread.start_new_thread(listen_for_message, (client_socket,))
 
-    CLI = colored('1-create account\n2-login\n3-logout\n4-show online users\n', 'blue')
+    CLI = colored('1-create account\n2-login\n3-logout\n4-show online users\n5-send message\n', 'blue')
 
     while True:
         print(CLI)
@@ -126,6 +149,10 @@ def main():
         elif command == 4:
             LISTEN = False
             handle_show_online_users(client_socket)
+            LISTEN = True
+        elif command == 5:
+            LISTEN = False
+            handle_send_message(client_socket)
             LISTEN = True
 
 
