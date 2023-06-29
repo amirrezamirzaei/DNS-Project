@@ -34,6 +34,8 @@ def handle_login(message, client_socket, sym_key):
         send_message(client_socket, 'username does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
     elif clients[message['username']]['password'] != message['password']:
         send_message(client_socket, 'password does not match username.', encrypt=True, symmetric=True, sym_key=sym_key)
+    elif clients[message['username']]['socket']:
+        send_message(client_socket, 'user is already logged in.', encrypt=True, symmetric=True, sym_key=sym_key)
     else:
         send_message(client_socket, 'login successful.', encrypt=True, symmetric=True, sym_key=sym_key)
         clients[message['username']]['socket'] = client_socket
@@ -77,7 +79,8 @@ def handle_key_exchange_with_another_client_p1(message, client_socket, sym_key):
     send_message(client_socket, str(message), encrypt=True, symmetric=True, sym_key=sym_key)
 
     message = {'api': 'exchange1', 'username': sender, 'p': p, 'g': g}
-    send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True, sym_key=clients[receiver]['key'])
+    send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
+                 sym_key=clients[receiver]['key'])
 
 
 def handle_key_exchange_with_another_client_p2(message, client_socket, sym_key):
@@ -86,8 +89,31 @@ def handle_key_exchange_with_another_client_p2(message, client_socket, sym_key):
     sender = message['sender']
     y = message['y']
     message = {'api': 'exchange2', 'username': sender, 'y': y}
-    send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True, sym_key=clients[receiver]['key'])
+    send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
+                 sym_key=clients[receiver]['key'])
 
+
+def handle_send_to_client(message, client_socket, sym_key):
+    sender = message['sender']
+    receiver = message['receiver']
+    pm = message['pm']
+
+    if sender not in clients or clients[sender]['socket'] != client_socket:
+        send_message(client_socket, 'you are not logged in.', encrypt=True, symmetric=True, sym_key=sym_key)
+        return
+    if receiver not in clients:
+        send_message(client_socket, 'username does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
+        return
+    elif not clients[receiver]['socket']:
+        send_message(client_socket, 'user not online.', encrypt=True, symmetric=True, sym_key=sym_key)
+        return
+
+
+    message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm}
+    send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
+                 sym_key=clients[receiver]['key'])
+
+    send_message(client_socket, 'sent.', encrypt=True, symmetric=True, sym_key=sym_key)
 
 def handle_client(client_socket, client_address):
     global clients
@@ -100,10 +126,9 @@ def handle_client(client_socket, client_address):
     while True:
         client_socket.setblocking(True)
         message = receive_message(client_socket, print_before_decrypt=True, decrypt=True, symmetric=True,
-                                  sym_key=sym_key)
+                                  sym_key=sym_key, jsonify=True)
         if message:
             print(message)
-            message = json.loads(message.replace("'", '"'))
 
             if message['api'] == 'signup_username':
                 handle_signup(message, client_socket, sym_key)
@@ -119,6 +144,8 @@ def handle_client(client_socket, client_address):
                 handle_key_exchange_with_another_client_p1(message, client_socket, sym_key)
             elif message['api'] == 'key_exchange_with_another_client_p2':
                 handle_key_exchange_with_another_client_p2(message, client_socket, sym_key)
+            elif message['api'] == 'send_to_client':
+                handle_send_to_client(message, client_socket, sym_key)
 
 
 def main():

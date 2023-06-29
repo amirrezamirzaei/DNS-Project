@@ -1,3 +1,7 @@
+import base64
+import hashlib
+import json
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -43,7 +47,7 @@ def decode_RSA(message, key_path):
     return ciphertext
 
 
-def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key=''):
+def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key='', jsonify=False):
     try:
         message_header = socket.recv(HEADER_LENGTH)
         if not len(message_header):
@@ -59,8 +63,10 @@ def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path=
         else:
             f = Fernet(sym_key)
             message = f.decrypt(message).decode('utf-8')
-
-        return message
+        if jsonify:
+            return json.loads(message.replace("'", '"'))
+        else:
+            return message
     except:
         return False
 
@@ -76,3 +82,9 @@ def send_message(socket, message, encrypt=False, key_path='', symmetric=False, s
 
     socket.send(header + message)
 
+
+def get_fernet_key_from_password(passcode: bytes) -> bytes:
+    assert isinstance(passcode, bytes)
+    hlib = hashlib.md5()
+    hlib.update(passcode)
+    return base64.urlsafe_b64encode(hlib.hexdigest().encode('latin-1'))

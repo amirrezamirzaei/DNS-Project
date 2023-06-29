@@ -2,12 +2,13 @@ import json
 import socket
 import _thread
 import hashlib
+import time
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
 from termcolor import colored
 from cryptography.fernet import Fernet
-from shared_utils import IP_SERVER, PORT_SERVER, receive_message, send_message
+from shared_utils import IP_SERVER, PORT_SERVER, receive_message, send_message, get_fernet_key_from_password
 
 LISTEN = True
 SYMMETRIC_KEY = None
@@ -22,27 +23,57 @@ def listen_for_message(recv_socket):
             recv_socket.setblocking(False)
             message = receive_message(recv_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY, jsonify=True)
             if message:
-                print(message)
                 if message['api'] == 'exchange1':
-                    p, g = message['p'], message['g']
-                    peer_username = message['username']
-                    print(f'exchanging key with {peer_username}')
-                    params_numbers = dh.DHParameterNumbers(p, g)
-                    parameters = params_numbers.parameters(default_backend())
-                    private_key = parameters.generate_private_key()
-                    peer_public_key = private_key.public_key()
+                    exchange_key(recv_socket, message)
+                elif message['api'] == 'new_message_from_client':
+                    pm = message['pm']
+                    sender = message['sender']
+                    print(colored(f'new message from {sender}:', 'yellow'), colored(pm, 'magenta'))
+            else:
+                time.sleep(0.5)
 
-                    message = {'api': 'key_exchange_with_another_client_p2', 'sender': USERNAME,
-                               'receiver': peer_username, 'y': peer_public_key.public_numbers().y}
-                    send_message(recv_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
 
-                    recv_socket.setblocking(True)
-                    message = receive_message(recv_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
-                    message = json.loads(message.replace("'", '"'))
-                    print('joj', message)
+def exchange_key(client_socket, server_response):
+    # server response will be public diffie hellman parameters
+    if type(server_response) == str:
+        server_response = json.loads(server_response.replace("'", '"'))
+    peer = server_response['username']
+    print(colored(f'exchanging key with {peer}', 'cyan'))
+    p, g = server_response['p'], server_response['g']
+    params_numbers = dh.DHParameterNumbers(p, g)
+    parameters = params_numbers.parameters(default_backend())
+    private_key = parameters.generate_private_key()
+    peer_public_key = private_key.public_key()
 
-                    p = dh.DHPublicNumbers(message['y'], params_numbers)
-                    print('khar shreck',private_key.exchange(p.public_key(default_backend())))
+    message = {'api': 'key_exchange_with_another_client_p2', 'sender': USERNAME,
+               'receiver': peer, 'y': peer_public_key.public_numbers().y}
+
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+    client_socket.setblocking(True)
+    message = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY, jsonify=True)
+    p = dh.DHPublicNumbers(message['y'], params_numbers)
+
+    generated_key = get_fernet_key_from_password(private_key.exchange(p.public_key(default_backend())))
+    CLIENT_KEYS[peer] = generated_key
+    print(colored(f'exchanging key with {peer} complete.', 'cyan'))
+
+
+def send_message_to_client(client_socket, receiver):
+    print('enter message:')
+    pm = input(colored(f'{USERNAME}>', 'yellow'))
+    message = {'api': 'send_to_client', 'sender': USERNAME, 'receiver': receiver, 'pm': pm}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+    if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
+            or server_response == 'user not online.':
+        print(colored(server_response, 'red'))
+        return
+    if server_response == 'sent.':
+        print(colored(server_response, 'green'))
+        return
 
 
 def handle_signup(client_socket):
@@ -87,7 +118,8 @@ def handle_login(client_socket):
     client_socket.setblocking(True)
     server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
 
-    if server_response == 'username does not exist.' or server_response == 'password does not match username.':
+    if server_response == 'username does not exist.' or server_response == 'password does not match username.' \
+            or server_response == 'user is already logged in.':
         print(colored(server_response, 'red'))
     elif server_response == 'login successful.':
         print(colored(f'{server_response} Welcome', 'green'), colored(f'{username}!', 'yellow'))
@@ -117,33 +149,24 @@ def handle_send_message(client_socket):
     print('enter username of the receiver:')
     receiver = input(colored(f'{USERNAME}>', 'yellow'))
 
-    message = {'api': 'key_exchange_with_another_client_p1', 'sender': USERNAME, 'receiver': receiver}
-    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+    if receiver in CLIENT_KEYS:  # already have key set between two client
+        send_message_to_client(client_socket, receiver)
 
-    client_socket.setblocking(True)
-    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+    else:  # initiate key exchange protocol
+        message = {'api': 'key_exchange_with_another_client_p1', 'sender': USERNAME, 'receiver': receiver}
+        send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
 
-    if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
-            or server_response == 'user not online.':
-        print(colored(server_response, 'red'))
-        return
+        client_socket.setblocking(True)
+        server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
 
-    # server response will be public diffie hellman parameters
-    server_response = json.loads(server_response.replace("'", '"'))
+        if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
+                or server_response == 'user not online.':
+            print(colored(server_response, 'red'))
+            return
 
-    p, g = server_response['p'], server_response['g']
-    params_numbers = dh.DHParameterNumbers(p, g)
-    parameters = params_numbers.parameters(default_backend())
-    private_key = parameters.generate_private_key()
-    peer_public_key = private_key.public_key()
+        exchange_key(client_socket, server_response)
 
-    message = {'api': 'key_exchange_with_another_client_p2', 'sender': USERNAME,
-               'receiver': receiver, 'y': peer_public_key.public_numbers().y}
-    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
-    client_socket.setblocking(True)
-    message = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY, jsonify=True)
-    p = dh.DHPublicNumbers(message['y'], params_numbers)
-    print('khar shreck', private_key.exchange(p.public_key(default_backend())))
+        send_message_to_client(client_socket, receiver)
 
 
 def main():
@@ -168,7 +191,10 @@ def main():
 
     while True:
         print(CLI)
-        command = int(input(colored(f'{USERNAME}>', 'yellow')))
+        try:
+            command = int(input(colored(f'{USERNAME}>', 'yellow')))
+        except:
+            continue
 
         if command == 1:  # create account
             LISTEN = False
