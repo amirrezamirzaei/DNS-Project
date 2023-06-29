@@ -1,9 +1,8 @@
 import socket
 from _thread import start_new_thread
 import json
-
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.backends.openssl import dh
+from cryptography.hazmat.primitives.asymmetric import dh
 
 from shared_utils import receive_message, IP_SERVER, PORT_SERVER, send_message
 
@@ -57,15 +56,16 @@ def handle_show_online_users(message, client_socket, sym_key):
     send_message(client_socket, response, encrypt=True, symmetric=True, sym_key=sym_key)
 
 
-def handle_key_exchange_with_another_client(message, client_socket, sym_key):
-    print('salam')
-    if message['sender'] not in clients or clients[message['sender']]['socket'] != client_socket:
+def handle_key_exchange_with_another_client_p1(message, client_socket, sym_key):
+    sender = message['sender']
+    receiver = message['receiver']
+    if sender not in clients or clients[sender]['socket'] != client_socket:
         send_message(client_socket, 'you are not logged in.', encrypt=True, symmetric=True, sym_key=sym_key)
         return
-    if message['receiver'] not in clients:
+    if receiver not in clients:
         send_message(client_socket, 'username does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
         return
-    elif not message['receiver']['socket']:
+    elif not clients[receiver]['socket']:
         send_message(client_socket, 'user not online.', encrypt=True, symmetric=True, sym_key=sym_key)
         return
 
@@ -73,11 +73,20 @@ def handle_key_exchange_with_another_client(message, client_socket, sym_key):
     p = parameters.parameter_numbers().p
     g = parameters.parameter_numbers().g
 
-    message = {'api': 'exchange', 'username': message['receiver'], 'p': p, 'g': g}
-    send_message(client_socket, message, encrypt=True, symmetric=True, sym_key=sym_key)
+    message = {'api': 'exchange1', 'username': receiver, 'p': p, 'g': g}
+    send_message(client_socket, str(message), encrypt=True, symmetric=True, sym_key=sym_key)
 
-    message = {'api': 'exchange', 'username': message['sender'], 'p': p, 'g': g}
-    send_message(clients[message['receiver']]['socket'], message, encrypt=True, symmetric=True, sym_key=sym_key)
+    message = {'api': 'exchange1', 'username': sender, 'p': p, 'g': g}
+    send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True, sym_key=clients[receiver]['key'])
+
+
+def handle_key_exchange_with_another_client_p2(message, client_socket, sym_key):
+    print(message)
+    receiver = message['receiver']
+    sender = message['sender']
+    y = message['y']
+    message = {'api': 'exchange2', 'username': sender, 'y': y}
+    send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True, sym_key=clients[receiver]['key'])
 
 
 def handle_client(client_socket, client_address):
@@ -106,8 +115,10 @@ def handle_client(client_socket, client_address):
                 handle_logout(message, client_socket, sym_key)
             elif message['api'] == 'show_online_users':
                 handle_show_online_users(message, client_socket, sym_key)
-            elif message['api'] == 'key_exchange_with_another_client':
-                handle_key_exchange_with_another_client(message, client_socket, sym_key)
+            elif message['api'] == 'key_exchange_with_another_client_p1':
+                handle_key_exchange_with_another_client_p1(message, client_socket, sym_key)
+            elif message['api'] == 'key_exchange_with_another_client_p2':
+                handle_key_exchange_with_another_client_p2(message, client_socket, sym_key)
 
 
 def main():

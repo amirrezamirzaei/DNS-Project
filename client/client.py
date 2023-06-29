@@ -1,6 +1,10 @@
+import json
 import socket
 import _thread
 import hashlib
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import dh
 from termcolor import colored
 from cryptography.fernet import Fernet
 from shared_utils import IP_SERVER, PORT_SERVER, receive_message, send_message
@@ -16,9 +20,29 @@ def listen_for_message(recv_socket):
     while True:
         if LISTEN:
             recv_socket.setblocking(False)
-            message = receive_message(recv_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+            message = receive_message(recv_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY, jsonify=True)
             if message:
                 print(message)
+                if message['api'] == 'exchange1':
+                    p, g = message['p'], message['g']
+                    peer_username = message['username']
+                    print(f'exchanging key with {peer_username}')
+                    params_numbers = dh.DHParameterNumbers(p, g)
+                    parameters = params_numbers.parameters(default_backend())
+                    private_key = parameters.generate_private_key()
+                    peer_public_key = private_key.public_key()
+
+                    message = {'api': 'key_exchange_with_another_client_p2', 'sender': USERNAME,
+                               'receiver': peer_username, 'y': peer_public_key.public_numbers().y}
+                    send_message(recv_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+                    recv_socket.setblocking(True)
+                    message = receive_message(recv_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+                    message = json.loads(message.replace("'", '"'))
+                    print('joj', message)
+
+                    p = dh.DHPublicNumbers(message['y'], params_numbers)
+                    print('khar shreck',private_key.exchange(p.public_key(default_backend())))
 
 
 def handle_signup(client_socket):
@@ -92,23 +116,34 @@ def handle_show_online_users(client_socket):
 def handle_send_message(client_socket):
     print('enter username of the receiver:')
     receiver = input(colored(f'{USERNAME}>', 'yellow'))
-    print('enter message:')
-    pm = input(colored(f'{USERNAME}>', 'yellow'))
 
-    message = {'api': 'key_exchange_with_another_client', 'sender': USERNAME, 'receiver': receiver}
+    message = {'api': 'key_exchange_with_another_client_p1', 'sender': USERNAME, 'receiver': receiver}
     send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
 
     client_socket.setblocking(True)
     server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
 
     if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
-            or 'user not online.':
+            or server_response == 'user not online.':
         print(colored(server_response, 'red'))
         return
 
     # server response will be public diffie hellman parameters
-    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
-    print(server_response)
+    server_response = json.loads(server_response.replace("'", '"'))
+
+    p, g = server_response['p'], server_response['g']
+    params_numbers = dh.DHParameterNumbers(p, g)
+    parameters = params_numbers.parameters(default_backend())
+    private_key = parameters.generate_private_key()
+    peer_public_key = private_key.public_key()
+
+    message = {'api': 'key_exchange_with_another_client_p2', 'sender': USERNAME,
+               'receiver': receiver, 'y': peer_public_key.public_numbers().y}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+    client_socket.setblocking(True)
+    message = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY, jsonify=True)
+    p = dh.DHPublicNumbers(message['y'], params_numbers)
+    print('khar shreck', private_key.exchange(p.public_key(default_backend())))
 
 
 def main():
