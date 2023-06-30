@@ -2,7 +2,7 @@ import cryptography
 from cryptography.fernet import Fernet
 from termcolor import colored
 
-from shared_utils import get_fernet_key_from_password
+from utils import get_fernet_key_from_password
 
 
 class SecureChain:
