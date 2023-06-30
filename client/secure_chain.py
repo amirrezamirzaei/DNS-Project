@@ -34,8 +34,9 @@ class SecureChain:
                 return bytes(session_key.encode('utf-8'))
 
             except cryptography.fernet.InvalidToken:
-                print(colored('wrong master pass', 'red'))
-                return None
+                continue
+        print(colored('wrong master pass', 'red'))
+        return None
 
     def remove_session_key(self, peer_username):
         if peer_username in self.session_keys:
@@ -74,13 +75,18 @@ class SecureChain:
         new_encoding_messages = []
         for i in range(len(self.messages)):
             message, is_encrypted_with_session_key, incoming, peer_username = self.messages[i]
-
-            try:
-                f = Fernet(get_fernet_key_from_password(message_old_password.encode('utf-8')))
-                message = f.decrypt(message)
-            except cryptography.fernet.InvalidToken:
+            flag = False
+            for password in [message_old_password, self.default_pass]:
+                f = Fernet(get_fernet_key_from_password(password.encode('utf-8')))
+                try:
+                    message = f.decrypt(message)
+                    flag = True
+                except cryptography.fernet.InvalidToken:
+                    continue
+            if not flag:
                 print(colored('incorrect old password. aborting.', 'red'))
                 return
+
 
             if is_encrypted_with_session_key:
                 session_key = self.get_session_key(peer_username, keychain_pass)

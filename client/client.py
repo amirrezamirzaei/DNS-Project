@@ -10,7 +10,8 @@ from termcolor import colored
 from cryptography.fernet import Fernet
 
 from secure_chain import SecureChain
-from shared_utils import IP_SERVER, PORT_SERVER, receive_message, send_message, get_fernet_key_from_password
+from utils import IP_SERVER, HEADER_LENGTH, PORT_SERVER, get_fernet_key_from_password, encrypt_with_public_key, \
+    decode_RSA
 
 LISTEN = True
 SYMMETRIC_KEY = None
@@ -18,7 +19,8 @@ PUBLIC_KEY_SERVER = '../public.pem'
 USERNAME = ''
 CLIENT_SECURE_CHAIN = SecureChain()
 DEFAULT_SECURE_CHAIN_PASS = ''
-MESSAGE_HISTORY = []
+REPLAY_WINDOW = [None for i in range(10)]
+COUNTER = 0
 
 
 def listen_for_message(recv_socket):
@@ -273,6 +275,64 @@ def main():
             print(CLIENT_SECURE_CHAIN.session_keys)
         elif command == -2:
             print(CLIENT_SECURE_CHAIN.messages)
+
+
+def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key='',
+                    jsonify=False):
+    global REPLAY_WINDOW
+    try:
+        message_header = socket.recv(HEADER_LENGTH)
+        if not len(message_header):
+            return False
+
+        message_length = int(message_header.decode('utf-8').strip())
+        message = socket.recv(message_length)
+
+        if print_before_decrypt:
+            print(message)
+
+        if decrypt and not symmetric:
+            message = decode_RSA(message, key_path)
+            timestamp = message.decode('utf-8')[-11:-1]
+            counter = int(message.decode('utf-8')[-1])
+        else:
+            f = Fernet(sym_key)
+            message = f.decrypt(message).decode('utf-8')
+            timestamp = message[-11:-1]
+            counter = int(message[-1])
+            message = message[0:-11]
+
+        # check replay attack
+        if REPLAY_WINDOW[counter] is None or REPLAY_WINDOW[counter] < timestamp:
+            REPLAY_WINDOW[counter] = timestamp
+        else:
+            print(colored('REPLAY ATTACK!', 'red'))
+            return False
+
+        if jsonify:
+            return json.loads(message.replace("'", '"'))
+        else:
+            return message
+    except:
+        return False
+
+
+def send_message(socket, message, encrypt=False, key_path='', symmetric=False, sym_key=''):
+    global COUNTER
+    if type(message) == str:
+        message = message.encode('utf-8')
+    message = message + f'{int(time.time())}{COUNTER % 10}'.encode('utf-8')  # add replay attack checker
+    COUNTER += 1
+
+    if encrypt and not symmetric:
+        message = encrypt_with_public_key(message, key_path)
+    else:
+        f = Fernet(sym_key)
+        message = f.encrypt(bytes(message))
+
+    header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+
+    socket.send(header + message)
 
 
 if __name__ == "__main__":

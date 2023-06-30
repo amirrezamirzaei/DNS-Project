@@ -1,12 +1,18 @@
 import socket
+import time
 from _thread import start_new_thread
 import json
+
+from cryptography.fernet import Fernet
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
+from termcolor import colored
 
-from shared_utils import receive_message, IP_SERVER, PORT_SERVER, send_message
+from utils import IP_SERVER, HEADER_LENGTH, PORT_SERVER, get_fernet_key_from_password, encrypt_with_public_key, \
+    decode_RSA
 
-clients = {}
+clients = {}  # user : pass, socket, symkey
+client_specific_info = {}  # socket : replay attack manager
 
 
 def handle_signup(message, client_socket, sym_key):
@@ -116,6 +122,9 @@ def handle_send_to_client(message, client_socket, sym_key):
 
 def handle_client(client_socket, client_address):
     global clients
+    global client_specific_info
+
+    client_specific_info[client_socket] = [0, [None for i in range(10)]]
 
     # get symmetric key from client
     client_socket.setblocking(True)
@@ -145,6 +154,70 @@ def handle_client(client_socket, client_address):
                 handle_key_exchange_with_another_client_p2(message, client_socket, sym_key)
             elif message['api'] == 'send_to_client':
                 handle_send_to_client(message, client_socket, sym_key)
+
+
+def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key='',
+                    jsonify=False):
+    global client_specific_info
+    try:
+        message_header = socket.recv(HEADER_LENGTH)
+        if not len(message_header):
+            return False
+
+        message_length = int(message_header.decode('utf-8').strip())
+        message = socket.recv(message_length)
+
+        if print_before_decrypt:
+            print('received before decryption:', colored(message, 'yellow'))
+
+        if decrypt and not symmetric:
+            message = decode_RSA(message, key_path)
+            timestamp = message.decode('utf-8')[-11:-1]
+            counter = int(message.decode('utf-8')[-1])
+        else:
+            f = Fernet(sym_key)
+            message = f.decrypt(message).decode('utf-8')
+            timestamp = message[-11:-1]
+            counter = int(message[-1])
+            message = message[0:-11]
+
+        # check replay attack
+        if client_specific_info[socket][1][counter] is None or client_specific_info[socket][1][counter] < timestamp:
+            client_specific_info[socket][1][counter] = timestamp
+        else:
+            print(colored('REPLAY ATTACK!', 'red'))
+            return False
+
+        print('received after decryption:', colored(message, 'blue'))
+        if jsonify:
+            return json.loads(message.replace("'", '"'))
+        else:
+            return message
+    except Exception as e:
+        print(colored(str(e), 'red'))
+        return False
+
+
+def send_message(socket, message, encrypt=False, key_path='', symmetric=False, sym_key=''):
+    global client_specific_info
+    counter = client_specific_info[socket][0]
+    if type(message) == str:
+        message = message.encode('utf-8')
+
+    print(colored(message, 'green'))
+
+    message = message + f'{int(time.time())}{counter % 10}'.encode('utf-8')
+    client_specific_info[socket][0] += 1
+
+    if encrypt and not symmetric:
+        message = encrypt_with_public_key(message, key_path)
+    else:
+        f = Fernet(sym_key)
+        message = f.encrypt(bytes(message))
+
+    header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')
+
+    socket.send(header + message)
 
 
 def main():
