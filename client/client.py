@@ -15,6 +15,7 @@ SYMMETRIC_KEY = None
 PUBLIC_KEY_SERVER = '../public.pem'
 USERNAME = ''
 CLIENT_KEYS = {}
+MESSAGE_HISTORY = []
 
 
 def listen_for_message(recv_socket):
@@ -181,6 +182,10 @@ def handle_send_message(client_socket):
         send_message_to_client(client_socket, receiver)
 
 
+def handle_message_history(client_socket):
+    print('enter username of the receiver:')
+
+
 def main():
     global LISTEN
     global SYMMETRIC_KEY
@@ -199,7 +204,8 @@ def main():
 
     _thread.start_new_thread(listen_for_message, (client_socket,))
 
-    CLI = colored('1-create account\n2-login\n3-logout\n4-show online users\n5-send message\n', 'blue')
+    CLI = colored('1-create account\n2-login\n3-logout\n4-show online users\n5-send message\n6-message history\n',
+                  'blue')
 
     while True:
         print(CLI)
@@ -226,6 +232,10 @@ def main():
         elif command == 5:
             LISTEN = False
             handle_send_message(client_socket)
+            LISTEN = True
+        elif command == 6:
+            LISTEN = False
+            handle_message_history(client_socket)
             LISTEN = True
 
 
