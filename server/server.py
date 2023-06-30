@@ -107,12 +107,12 @@ def handle_send_to_client(message, client_socket, sym_key):
         send_message(client_socket, 'user not online.', encrypt=True, symmetric=True, sym_key=sym_key)
         return
 
-
     message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm}
     send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
                  sym_key=clients[receiver]['key'])
 
     send_message(client_socket, 'sent.', encrypt=True, symmetric=True, sym_key=sym_key)
+
 
 def handle_client(client_socket, client_address):
     global clients
