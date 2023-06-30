@@ -1,3 +1,4 @@
+import hashlib
 import socket
 import time
 from _thread import start_new_thread
@@ -129,8 +130,6 @@ def handle_client(client_socket, client_address):
     # get symmetric key from client
     client_socket.setblocking(True)
     sym_key = receive_message(client_socket, print_before_decrypt=True, decrypt=True, key_path='private.pem')
-    print(sym_key)
-
     while True:
         client_socket.setblocking(True)
         message = receive_message(client_socket, print_before_decrypt=True, decrypt=True, symmetric=True,
@@ -174,12 +173,25 @@ def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path=
             message = decode_RSA(message, key_path)
             timestamp = message.decode('utf-8')[-11:-1]
             counter = int(message.decode('utf-8')[-1])
+            hash_message = message.decode('utf-8')[-75:-11]
+            message = message.decode('utf-8')[0:-75].encode('utf-8')
         else:
             f = Fernet(sym_key)
             message = f.decrypt(message).decode('utf-8')
             timestamp = message[-11:-1]
             counter = int(message[-1])
-            message = message[0:-11]
+            hash_message = message[-75:-11]
+            message = message[0:-75]
+
+        # check integrity
+        hash = hashlib.sha256()
+        if type(message) == str:
+            hash.update(message.encode('utf-8'))
+        else:
+            hash.update(message)
+        if hash.hexdigest() != hash_message:
+            print(colored('Integrity of message error', 'red'))
+            return False
 
         # check replay attack
         if client_specific_info[socket][1][counter] is None or client_specific_info[socket][1][counter] < timestamp:
@@ -204,9 +216,13 @@ def send_message(socket, message, encrypt=False, key_path='', symmetric=False, s
     if type(message) == str:
         message = message.encode('utf-8')
 
-    print(colored(message, 'green'))
+    print('sending:', colored(message, 'green'))
 
-    message = message + f'{int(time.time())}{counter % 10}'.encode('utf-8')
+    hash = hashlib.sha256()
+    hash.update(message)
+    message = message + hash.hexdigest().encode('utf-8')  # add hash
+
+    message = message + f'{int(time.time())}{counter % 10}'.encode('utf-8') # add replay attack checker
     client_specific_info[socket][0] += 1
 
     if encrypt and not symmetric:

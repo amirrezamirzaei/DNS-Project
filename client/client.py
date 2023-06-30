@@ -295,12 +295,25 @@ def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path=
             message = decode_RSA(message, key_path)
             timestamp = message.decode('utf-8')[-11:-1]
             counter = int(message.decode('utf-8')[-1])
+            hash_message = message.decode('utf-8')[-75:-11]
+            message = message.decode('utf-8')[0:-75].encode('utf-8')
         else:
             f = Fernet(sym_key)
             message = f.decrypt(message).decode('utf-8')
             timestamp = message[-11:-1]
             counter = int(message[-1])
-            message = message[0:-11]
+            hash_message = message[-75:-11]
+            message = message[0:-75]
+
+        # check integrity
+        hash = hashlib.sha256()
+        if type(message) == str:
+            hash.update(message.encode('utf-8'))
+        else:
+            hash.update(message)
+        if hash.hexdigest() != hash_message:
+            print(colored('Integrity of message error', 'red'))
+            return False
 
         # check replay attack
         if REPLAY_WINDOW[counter] is None or REPLAY_WINDOW[counter] < timestamp:
@@ -321,6 +334,11 @@ def send_message(socket, message, encrypt=False, key_path='', symmetric=False, s
     global COUNTER
     if type(message) == str:
         message = message.encode('utf-8')
+
+    hash = hashlib.sha256()
+    hash.update(message)
+    message = message + hash.hexdigest().encode('utf-8')  # add hash
+
     message = message + f'{int(time.time())}{COUNTER % 10}'.encode('utf-8')  # add replay attack checker
     COUNTER += 1
 
