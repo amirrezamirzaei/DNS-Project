@@ -28,9 +28,16 @@ def listen_for_message(recv_socket):
                 elif message['api'] == 'new_message_from_client':
                     pm = message['pm']
                     sender = message['sender']
-                    print(colored(f'new message from {sender}:', 'yellow'), colored(pm, 'magenta'))
+                    if sender in CLIENT_KEYS:
+                        shared_key = CLIENT_KEYS[sender]
+                        fkey = get_fernet_key_from_password(shared_key)
+                        f = Fernet(fkey)
+                        pm = f.decrypt(pm.encode('utf-8')).decode('utf-8')
+                        print(colored(f'new message from {sender}:', 'yellow'), colored(pm, 'magenta'))
+                    else:
+                        print(colored('message received from client without shared key', 'red'))
             else:
-                time.sleep(0.5)
+                time.sleep(1)
 
 
 def exchange_key(client_socket, server_response):
@@ -61,6 +68,11 @@ def exchange_key(client_socket, server_response):
 def send_message_to_client(client_socket, receiver):
     print('enter message:')
     pm = input(colored(f'{USERNAME}>', 'yellow'))
+    # encrypt with shared key
+    shared_key = CLIENT_KEYS[receiver]
+    fkey = get_fernet_key_from_password(shared_key)
+    f = Fernet(fkey)
+    pm = f.encrypt(bytes(pm.encode('utf-8'))).decode('utf-8')
     message = {'api': 'send_to_client', 'sender': USERNAME, 'receiver': receiver, 'pm': pm}
     send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
 

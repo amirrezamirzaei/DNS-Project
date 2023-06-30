@@ -84,7 +84,6 @@ def handle_key_exchange_with_another_client_p1(message, client_socket, sym_key):
 
 
 def handle_key_exchange_with_another_client_p2(message, client_socket, sym_key):
-    print(message)
     receiver = message['receiver']
     sender = message['sender']
     y = message['y']
@@ -128,7 +127,7 @@ def handle_client(client_socket, client_address):
         message = receive_message(client_socket, print_before_decrypt=True, decrypt=True, symmetric=True,
                                   sym_key=sym_key, jsonify=True)
         if message:
-            print(message)
+            print(f'received {message}')
 
             if message['api'] == 'signup_username':
                 handle_signup(message, client_socket, sym_key)
