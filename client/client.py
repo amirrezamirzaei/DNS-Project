@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.asymmetric import dh
 from termcolor import colored
 from cryptography.fernet import Fernet
 
+from emojify import text_to_emoji
 from secure_chain import SecureChain
 from utils import IP_SERVER, HEADER_LENGTH, PORT_SERVER, get_fernet_key_from_password, encrypt_with_public_key, \
     decode_RSA
@@ -208,6 +209,15 @@ def handle_message_history(client_socket):
     CLIENT_SECURE_CHAIN.show_all_messages(old_pass, new_pass, keychain_pass)
 
 
+def handle_check_session_integrity():
+    print('enter key chain password:')
+    keychain_pass = input(colored(f'{USERNAME}>', 'yellow'))
+    for peer in CLIENT_SECURE_CHAIN.get_peers():
+        key = CLIENT_SECURE_CHAIN.get_session_key(peer, keychain_pass)
+        if key:
+            print(f'{peer}:{text_to_emoji(key)}')
+
+
 def main():
     global LISTEN
     global SYMMETRIC_KEY
@@ -233,7 +243,8 @@ def main():
                   '4-show online users\n'
                   '5-send message\n'
                   '6-message history\n'
-                  '7-set keychain password\n',
+                  '7-set keychain password\n'
+                  '8-check session integrity\n',
                   'blue')
     # secret dev menu
     # -1 to show keychain
@@ -270,6 +281,10 @@ def main():
         elif command == 7:
             LISTEN = False
             handle_change_keychain_pass()
+            LISTEN = True
+        elif command == 8:
+            LISTEN = False
+            handle_check_session_integrity()
             LISTEN = True
         elif command == -1:
             print(CLIENT_SECURE_CHAIN.session_keys)

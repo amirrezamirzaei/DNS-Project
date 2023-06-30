@@ -38,6 +38,9 @@ class SecureChain:
         print(colored('wrong master pass', 'red'))
         return None
 
+    def get_peers(self):
+        return self.session_keys.keys()
+
     def remove_session_key(self, peer_username):
         if peer_username in self.session_keys:
             self.session_keys[peer_username] = None
