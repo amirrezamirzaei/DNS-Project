@@ -334,6 +334,28 @@ def handle_add_to_group(client_socket):
             exchange_key(client_socket, server_response)
 
 
+def handle_remove_from_group(client_socket):
+    print('enter the username of the person you want to remove from group:')
+    who_to_add = input(colored(f'{USERNAME}>', 'yellow'))
+
+    print(f'enter the group you want to remove {who_to_add} from:')
+    group_name = input(colored(f'{USERNAME}>', 'yellow'))
+
+    message = {'api': 'remove_from_group', 'username_to_add': who_to_add, 'group_name': group_name,
+               'username': USERNAME}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+    if server_response == 'you must login first.' or server_response == 'user does not exist.' \
+            or server_response == 'group does not exist.' or server_response == 'permission denied.' \
+            or  server_response == 'user not in group.':
+        print(colored(server_response, 'red'))
+    else:
+        print(colored(f'{who_to_add} removed from {group_name}', 'green'))
+
+
 def handle_send_message_to_group(client_socket):
     print(f'enter the group you want to send the message in:')
     group_name = input(colored(f'{USERNAME}>', 'yellow'))
@@ -388,7 +410,8 @@ def main():
                   '10-add group\n'
                   '11-get groups info\n'
                   '12-add user to group\n'
-                  '13-send message to group\n',
+                  '13-remove user from group\n'
+                  '14-send message to group\n',
                   'blue')
     # secret dev menu
     # -1 to show keychain
@@ -447,6 +470,10 @@ def main():
             handle_add_to_group(client_socket)
             LISTEN = True
         elif command == 13:
+            LISTEN = False
+            handle_remove_from_group(client_socket)
+            LISTEN = True
+        elif command == 14:
             LISTEN = False
             handle_send_message_to_group(client_socket)
             LISTEN = True

@@ -189,6 +189,28 @@ def handle_add_to_group(message, client_socket, sym_key):
         send_message(client_socket, 'success.', encrypt=True, symmetric=True, sym_key=sym_key)
 
 
+def handle_remove_from_group(message, client_socket, sym_key):
+    global clients
+    global group_info
+    username_to_add = message['username_to_add']
+    username = message['username']
+    group_name = message['group_name']
+
+    if username not in clients:
+        send_message(client_socket, 'you must login first.', encrypt=True, symmetric=True, sym_key=sym_key)
+    elif username_to_add not in clients:
+        send_message(client_socket, 'user does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
+    elif group_name not in group_info:
+        send_message(client_socket, 'group does not exist.', encrypt=True, symmetric=True, sym_key=sym_key)
+    elif group_info[group_name]['admin'] != username:
+        send_message(client_socket, 'permission denied.', encrypt=True, symmetric=True, sym_key=sym_key)
+    elif username_to_add not in group_info[group_name]['users']:
+        send_message(client_socket, 'user already in group.', encrypt=True, symmetric=True, sym_key=sym_key)
+    else:
+        group_info[group_name]['users'].remove(username_to_add)
+        send_message(client_socket, 'success.', encrypt=True, symmetric=True, sym_key=sym_key)
+
+
 def handle_client(client_socket, client_address):
     global clients
     global client_specific_info
@@ -231,6 +253,8 @@ def handle_client(client_socket, client_address):
                 handle_group_info(message, client_socket, sym_key)
             elif message['api'] == 'add_to_group':
                 handle_add_to_group(message, client_socket, sym_key)
+            elif message['api'] == 'remove_from_group':
+                handle_remove_from_group(message, client_socket, sym_key)
 
 
 def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key='',
