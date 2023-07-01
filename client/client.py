@@ -35,9 +35,10 @@ def listen_for_message(recv_socket):
                 elif message['api'] == 'new_message_from_client':
                     pm = message['pm']
                     sender = message['sender']
+                    group_name = message['group_name']
                     if CLIENT_SECURE_CHAIN.have_session_with(sender):
                         print(colored(f'new message from {sender}:', 'yellow'), colored(pm, 'magenta'))
-                        CLIENT_SECURE_CHAIN.add_message(pm, True, True, sender)
+                        CLIENT_SECURE_CHAIN.add_message(pm, True, True, sender, group_name=group_name)
                     else:
                         print(colored('message received from client without shared key', 'red'))
             else:
@@ -68,31 +69,32 @@ def exchange_key(client_socket, server_response):
     print(colored(f'exchanging key with {peer} complete.', 'cyan'))
 
 
-def send_message_to_client(client_socket, receiver):
+def send_message_to_client(client_socket, receivers, group_name=''):
     print('enter message:')
     pm = input(colored(f'{USERNAME}>', 'yellow'))
     # encrypt with shared key
     print('enter key chain password:')
     password = input(colored(f'{USERNAME}>', 'yellow'))
-    shared_key = CLIENT_SECURE_CHAIN.get_session_key(receiver, password)
-    if shared_key is None:
-        return
-    f = Fernet(shared_key)
-    pm_after_encryption = f.encrypt(bytes(pm.encode('utf-8'))).decode('utf-8')
-    message = {'api': 'send_to_client', 'sender': USERNAME, 'receiver': receiver, 'pm': pm_after_encryption}
-    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
 
-    client_socket.setblocking(True)
-    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+    for receiver in receivers:
+        shared_key = CLIENT_SECURE_CHAIN.get_session_key(receiver, password)
+        if shared_key is None:
+            continue
+        f = Fernet(shared_key)
+        pm_after_encryption = f.encrypt(bytes(pm.encode('utf-8'))).decode('utf-8')
+        message = {'api': 'send_to_client', 'sender': USERNAME, 'receiver': receiver,
+                   'pm': pm_after_encryption, 'group_name': group_name}
+        send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
 
-    if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
-            or server_response == 'user not online.':
-        print(colored(server_response, 'red'))
-        return
-    if server_response == 'sent.':
-        CLIENT_SECURE_CHAIN.add_message(pm, False, False, receiver)
-        print(colored(server_response, 'green'))
-        return
+        client_socket.setblocking(True)
+        server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+        if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
+                or server_response == 'user not online.':
+            print(colored(server_response, 'red'))
+        if server_response == 'sent.':
+            CLIENT_SECURE_CHAIN.add_message(pm, False, False, receiver, group_name=group_name)
+            print(colored(f'sent to {receiver}', 'green'))
 
 
 def handle_set_sym_key_with_server(client_socket, first_time=False):
@@ -189,7 +191,7 @@ def handle_send_message(client_socket):
     print('enter username of the receiver:')
     receiver = input(colored(f'{USERNAME}>', 'yellow'))
     if CLIENT_SECURE_CHAIN.have_session_with(receiver):  # already have key set between two client
-        send_message_to_client(client_socket, receiver)
+        send_message_to_client(client_socket, [receiver])
 
     else:  # initiate key exchange protocol
         message = {'api': 'key_exchange_with_another_client_p1', 'sender': USERNAME, 'receiver': receiver}
@@ -205,7 +207,7 @@ def handle_send_message(client_socket):
 
         exchange_key(client_socket, server_response)
 
-        send_message_to_client(client_socket, receiver)
+        send_message_to_client(client_socket, [receiver])
 
 
 def handle_change_keychain_pass():
@@ -272,7 +274,7 @@ def handle_create_group(client_socket):
         print(colored(f'group {group_name} created', 'green'))
 
 
-def handle_group_info(client_socket):
+def handle_group_info(client_socket, show_info=True):
     global LISTEN
     global USERNAME
 
@@ -284,13 +286,17 @@ def handle_group_info(client_socket):
 
     if server_response == 'you must login first.':
         print(colored(server_response, 'red'))
+        return None
     else:
         server_response = json.loads(server_response.replace("'", '"'))
-        for i in range(len(server_response)):
-            print(colored(f'{i + 1}-', 'blue'),
-                  colored(f"name:{server_response[i]['group_name']}", 'yellow'),
-                  colored(f"admin:{server_response[i]['admin']}", 'red'),
-                  colored(f"members:{server_response[i]['users']}", 'cyan'))
+        if show_info:
+            for i in range(len(server_response)):
+                print(colored(f'{i + 1}-', 'blue'),
+                      colored(f"name:{server_response[i]['group_name']}", 'yellow'),
+                      colored(f"admin:{server_response[i]['admin']}", 'red'),
+                      colored(f"members:{server_response[i]['users']}", 'cyan'))
+        else:
+            return server_response
 
 
 def handle_add_to_group(client_socket):
@@ -328,6 +334,29 @@ def handle_add_to_group(client_socket):
             exchange_key(client_socket, server_response)
 
 
+def handle_send_message_to_group(client_socket):
+    print(f'enter the group you want to send the message in:')
+    group_name = input(colored(f'{USERNAME}>', 'yellow'))
+
+    groups_info = handle_group_info(client_socket, show_info=False)
+    if not groups_info:
+        return
+
+    c_group = None
+    for info in groups_info:
+        if info['group_name'] == group_name:
+            c_group = info
+            continue
+
+    if not c_group:
+        print(colored('group does not exist.', 'red'))
+    elif c_group['admin'] == USERNAME:  # you are admin send to every one
+        send_message_to_client(client_socket, c_group['users'], group_name=group_name)
+    else:  # you are not admin send message to admin
+        print(f'enter message:')
+        pm = input(colored(f'{USERNAME}>', 'yellow'))
+
+
 def main():
     global LISTEN
     global SYMMETRIC_KEY
@@ -358,7 +387,8 @@ def main():
                   '9-refresh session key\n'
                   '10-add group\n'
                   '11-get groups info\n'
-                  '12-add user to group\n',
+                  '12-add user to group\n'
+                  '13-send message to group\n',
                   'blue')
     # secret dev menu
     # -1 to show keychain
@@ -415,6 +445,10 @@ def main():
         elif command == 12:
             LISTEN = False
             handle_add_to_group(client_socket)
+            LISTEN = True
+        elif command == 13:
+            LISTEN = False
+            handle_send_message_to_group(client_socket)
             LISTEN = True
         elif command == -1:
             print(CLIENT_SECURE_CHAIN.session_keys)

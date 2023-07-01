@@ -104,7 +104,7 @@ def handle_send_to_client(message, client_socket, sym_key):
     sender = message['sender']
     receiver = message['receiver']
     pm = message['pm']
-
+    group_name = message['group_name']
     if sender not in clients or clients[sender]['socket'] != client_socket:
         send_message(client_socket, 'you are not logged in.', encrypt=True, symmetric=True, sym_key=sym_key)
         return
@@ -115,7 +115,7 @@ def handle_send_to_client(message, client_socket, sym_key):
         send_message(client_socket, 'user not online.', encrypt=True, symmetric=True, sym_key=sym_key)
         return
 
-    message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm}
+    message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm, 'group_name': group_name}
     send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
                  sym_key=clients[receiver]['key'])
 
@@ -187,8 +187,6 @@ def handle_add_to_group(message, client_socket, sym_key):
     else:
         group_info[group_name]['users'].append(username_to_add)
         send_message(client_socket, 'success.', encrypt=True, symmetric=True, sym_key=sym_key)
-
-
 
 
 def handle_client(client_socket, client_address):
