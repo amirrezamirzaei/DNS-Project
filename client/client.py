@@ -3,7 +3,6 @@ import socket
 import _thread
 import hashlib
 import time
-
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
 from termcolor import colored
@@ -218,6 +217,25 @@ def handle_check_session_integrity():
             print(f'{peer}:{text_to_emoji(key)}')
 
 
+def handle_refresh_session_key(client_socket):
+    print('enter username of person you wish to exchange key with again:')
+    print('possible choices:', colored(' '.join(CLIENT_SECURE_CHAIN.get_peers()), 'cyan'))
+    peer_username = input(colored(f'{USERNAME}>', 'yellow'))
+
+    message = {'api': 'key_exchange_with_another_client_p1', 'sender': USERNAME, 'receiver': peer_username}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+    if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
+            or server_response == 'user not online.':
+        print(colored(server_response, 'red'))
+        return
+
+    exchange_key(client_socket, server_response)
+
+
 def main():
     global LISTEN
     global SYMMETRIC_KEY
@@ -244,7 +262,8 @@ def main():
                   '5-send message\n'
                   '6-message history\n'
                   '7-set keychain password\n'
-                  '8-check session integrity\n',
+                  '8-check session integrity\n'
+                  '9-refresh session key\n',
                   'blue')
     # secret dev menu
     # -1 to show keychain
@@ -285,6 +304,10 @@ def main():
         elif command == 8:
             LISTEN = False
             handle_check_session_integrity()
+            LISTEN = True
+        elif command == 9:
+            LISTEN = False
+            handle_refresh_session_key(client_socket)
             LISTEN = True
         elif command == -1:
             print(CLIENT_SECURE_CHAIN.session_keys)
