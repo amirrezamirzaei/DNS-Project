@@ -101,6 +101,7 @@ def handle_key_exchange_with_another_client_p2(message, client_socket, sym_key):
 
 
 def handle_send_to_client(message, client_socket, sym_key):
+    global group_info
     sender = message['sender']
     receiver = message['receiver']
     pm = message['pm']
@@ -114,10 +115,15 @@ def handle_send_to_client(message, client_socket, sym_key):
     elif not clients[receiver]['socket']:
         send_message(client_socket, 'user not online.', encrypt=True, symmetric=True, sym_key=sym_key)
         return
-
-    message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm, 'group_name': group_name}
-    send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
-                 sym_key=clients[receiver]['key'])
+    # receiver is admin and message is group message
+    if group_name and group_name in group_info and group_info[group_name]['admin'] == receiver:
+        message = {'api': 'new_group_message', 'sender': sender, 'pm': pm, 'group_name': group_name}
+        send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
+                     sym_key=clients[receiver]['key'])
+    else:
+        message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm, 'group_name': group_name}
+        send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
+                     sym_key=clients[receiver]['key'])
 
     send_message(client_socket, 'sent.', encrypt=True, symmetric=True, sym_key=sym_key)
 

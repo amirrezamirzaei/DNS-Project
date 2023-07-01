@@ -375,8 +375,7 @@ def handle_send_message_to_group(client_socket):
     elif c_group['admin'] == USERNAME:  # you are admin send to every one
         send_message_to_client(client_socket, c_group['users'], group_name=group_name)
     else:  # you are not admin send message to admin
-        print(f'enter message:')
-        pm = input(colored(f'{USERNAME}>', 'yellow'))
+        send_message_to_client(client_socket, c_group['admin'], group_name=group_name)
 
 
 def main():
