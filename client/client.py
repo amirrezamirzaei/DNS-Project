@@ -287,10 +287,45 @@ def handle_group_info(client_socket):
     else:
         server_response = json.loads(server_response.replace("'", '"'))
         for i in range(len(server_response)):
-            print(colored(f'{i+1}-', 'blue'),
+            print(colored(f'{i + 1}-', 'blue'),
                   colored(f"name:{server_response[i]['group_name']}", 'yellow'),
                   colored(f"admin:{server_response[i]['admin']}", 'red'),
                   colored(f"members:{server_response[i]['users']}", 'cyan'))
+
+
+def handle_add_to_group(client_socket):
+    print('enter the username of the person you want to add to group:')
+    who_to_add = input(colored(f'{USERNAME}>', 'yellow'))
+
+    print(f'enter the group you want to add {who_to_add} to:')
+    group_name = input(colored(f'{USERNAME}>', 'yellow'))
+
+    message = {'api': 'add_to_group', 'username_to_add': who_to_add, 'group_name': group_name, 'username': USERNAME}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+    if server_response == 'you must login first.' or server_response == 'user does not exist.' \
+            or server_response == 'group does not exist.' or server_response == 'permission denied.' \
+            or server_response == 'user not online.' or server_response == 'user already in group.':
+        print(colored(server_response, 'red'))
+    else:
+        print(colored(f'{who_to_add} added to {group_name}', 'green'))
+        print('initiating key exchange...')
+
+        if CLIENT_SECURE_CHAIN.have_session_with(who_to_add):
+            print('key already set.')
+        else:
+            message = {'api': 'key_exchange_with_another_client_p1', 'sender': USERNAME, 'receiver': who_to_add}
+            send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+            client_socket.setblocking(True)
+            server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+            if server_response == 'username does not exist.' or server_response == 'you are not logged in.' \
+                    or server_response == 'user not online.':
+                print(colored(server_response, 'red'))
+                return
+            exchange_key(client_socket, server_response)
 
 
 def main():
@@ -322,7 +357,8 @@ def main():
                   '8-check session integrity\n'
                   '9-refresh session key\n'
                   '10-add group\n'
-                  '11-get groups info\n',
+                  '11-get groups info\n'
+                  '12-add user to group\n',
                   'blue')
     # secret dev menu
     # -1 to show keychain
@@ -375,6 +411,10 @@ def main():
         elif command == 11:
             LISTEN = False
             handle_group_info(client_socket)
+            LISTEN = True
+        elif command == 12:
+            LISTEN = False
+            handle_add_to_group(client_socket)
             LISTEN = True
         elif command == -1:
             print(CLIENT_SECURE_CHAIN.session_keys)
