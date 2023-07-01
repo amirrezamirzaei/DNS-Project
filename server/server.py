@@ -14,6 +14,7 @@ from utils import IP_SERVER, HEADER_LENGTH, PORT_SERVER, get_fernet_key_from_pas
 
 clients = {}  # user : pass, socket, symkey
 client_specific_info = {}  # socket : replay attack manager
+group_info = {}
 
 
 def handle_signup(message, client_socket, sym_key):
@@ -135,6 +136,35 @@ def handle_set_sym_key(message, client_socket, sym_key):
     return new_key
 
 
+def handle_create_group(message, client_socket, sym_key):
+    global clients
+    global group_info
+    admin_username = message['username']
+    group_name = message['group_name']
+    if admin_username not in clients:
+        send_message(client_socket, 'you must login first.', encrypt=True, symmetric=True, sym_key=sym_key)
+    elif group_name in group_info:
+        send_message(client_socket, 'group with this name already exists.', encrypt=True, symmetric=True,
+                     sym_key=sym_key)
+    else:
+        group_info[group_name] = {'admin': admin_username, 'users': []}
+        send_message(client_socket, 'success.', encrypt=True, symmetric=True, sym_key=sym_key)
+
+
+def handle_group_info(message, client_socket, sym_key):
+    global clients
+    global group_info
+    username = message['username']
+    if username not in clients:
+        send_message(client_socket, 'you must login first.', encrypt=True, symmetric=True, sym_key=sym_key)
+    else:
+        result = []
+        for group_name, members in group_info.items():
+            if members['admin'] == username or username in members['users']:
+                result.append({'group_name': group_name, 'admin': members['admin'], 'users': members['users']})
+        send_message(client_socket, str(result), encrypt=True, symmetric=True, sym_key=sym_key)
+
+
 def handle_client(client_socket, client_address):
     global clients
     global client_specific_info
@@ -171,6 +201,10 @@ def handle_client(client_socket, client_address):
                 handle_send_to_client(message, client_socket, sym_key)
             elif message['api'] == 'set_sym_key_p1':
                 sym_key = handle_set_sym_key(message, client_socket, sym_key)
+            elif message['api'] == 'create_group':
+                handle_create_group(message, client_socket, sym_key)
+            elif message['api'] == 'group_info':
+                handle_group_info(message, client_socket, sym_key)
 
 
 def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key='',

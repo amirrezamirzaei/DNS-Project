@@ -254,6 +254,45 @@ def handle_refresh_session_key(client_socket):
     exchange_key(client_socket, server_response)
 
 
+def handle_create_group(client_socket):
+    global LISTEN
+    global USERNAME
+
+    group_name = input('enter group name:')
+
+    message = {'api': 'create_group', 'username': USERNAME, 'group_name': group_name}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+    if server_response == 'you must login first.' or server_response == 'group with this name already exists.':
+        print(colored(server_response, 'red'))
+    elif server_response == 'success.':
+        print(colored(f'group {group_name} created', 'green'))
+
+
+def handle_group_info(client_socket):
+    global LISTEN
+    global USERNAME
+
+    message = {'api': 'group_info', 'username': USERNAME}
+    send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+
+    client_socket.setblocking(True)
+    server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
+
+    if server_response == 'you must login first.':
+        print(colored(server_response, 'red'))
+    else:
+        server_response = json.loads(server_response.replace("'", '"'))
+        for i in range(len(server_response)):
+            print(colored(f'{i+1}-', 'blue'),
+                  colored(f"name:{server_response[i]['group_name']}", 'yellow'),
+                  colored(f"admin:{server_response[i]['admin']}", 'red'),
+                  colored(f"members:{server_response[i]['users']}", 'cyan'))
+
+
 def main():
     global LISTEN
     global SYMMETRIC_KEY
@@ -281,7 +320,9 @@ def main():
                   '6-message history\n'
                   '7-set keychain password\n'
                   '8-check session integrity\n'
-                  '9-refresh session key\n',
+                  '9-refresh session key\n'
+                  '10-add group\n'
+                  '11-get groups info\n',
                   'blue')
     # secret dev menu
     # -1 to show keychain
@@ -327,12 +368,20 @@ def main():
             LISTEN = False
             handle_refresh_session_key(client_socket)
             LISTEN = True
+        elif command == 10:
+            LISTEN = False
+            handle_create_group(client_socket)
+            LISTEN = True
+        elif command == 11:
+            LISTEN = False
+            handle_group_info(client_socket)
+            LISTEN = True
         elif command == -1:
             print(CLIENT_SECURE_CHAIN.session_keys)
         elif command == -2:
             print(CLIENT_SECURE_CHAIN.messages)
 
-        if COUNTER > REFRESH_RATE == 1:
+        if COUNTER > REFRESH_RATE:
             COUNTER = 0
             print(colored('setting new sym key with server', 'cyan'))
             handle_set_sym_key_with_server(client_socket, first_time=False)
