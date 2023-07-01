@@ -64,7 +64,7 @@ class SecureChain:
         for peer_username, key in keys.items():
             self.add_session_key(peer_username, key, password)
 
-    def add_message(self, message, is_encrypted_with_session_key, incoming, peer_username, group_name):
+    def add_message(self, message, is_encrypted_with_session_key, incoming, peer_username, group_name='', forward_to_all=False):
         # encode message
         if type(message) == str:
             message = message.encode('utf-8')
@@ -72,12 +72,13 @@ class SecureChain:
         f = Fernet(key)
         message = f.encrypt(message)
 
-        self.messages.append((message, is_encrypted_with_session_key, incoming, peer_username, group_name))
+        self.messages.append(
+            (message, is_encrypted_with_session_key, incoming, peer_username, group_name, forward_to_all))
 
     def show_all_messages(self, message_old_password, message_new_password, keychain_pass):
         new_encoding_messages = []
         for i in range(len(self.messages)):
-            message, is_encrypted_with_session_key, incoming, peer_username, group_name = self.messages[i]
+            message, is_encrypted_with_session_key, incoming, peer_username, group_name, forward_to_all = self.messages[i]
             flag = False
             for password in [message_old_password, self.default_pass]:
                 f = Fernet(get_fernet_key_from_password(password.encode('utf-8')))
@@ -89,7 +90,6 @@ class SecureChain:
             if not flag:
                 print(colored('incorrect old password. aborting.', 'red'))
                 return
-
 
             if is_encrypted_with_session_key:
                 session_key = self.get_session_key(peer_username, keychain_pass)
@@ -105,18 +105,21 @@ class SecureChain:
                     continue
 
             if incoming and not group_name:
-                print(colored(f'received from {peer_username}:', 'yellow'), colored(f'{message.decode("utf-8")}', 'magenta'))
+                print(colored(f'received from {peer_username}:', 'yellow'),
+                      colored(f'{message.decode("utf-8")}', 'magenta'))
             elif incoming and group_name:
-                print(colored(f'{group_name}:','red'),colored(f'received from {peer_username}:', 'yellow'),colored(f'{message.decode("utf-8")}', 'magenta'))
+                print(colored(f'{group_name}:', 'red'), colored(f'received from {peer_username}:', 'yellow'),
+                      colored(f'{message.decode("utf-8")}', 'magenta'))
             elif not incoming and not group_name:
                 print(colored(f'sent to {peer_username}:', 'yellow'), colored(f'{message.decode("utf-8")}', 'magenta'))
             else:
-                print(colored(f'{group_name}:','red'),colored(f'sent to {peer_username}:', 'yellow'), colored(f'{message.decode("utf-8")}', 'magenta'))
+                print(colored(f'{group_name}:', 'red'), colored(f'sent to {peer_username}:', 'yellow'),
+                      colored(f'{message.decode("utf-8")}', 'magenta'))
 
             f = Fernet(get_fernet_key_from_password(message_new_password.encode('utf-8')))
             message = f.encrypt(message)
 
-            new_encoding_messages.append((message, False, incoming, peer_username, group_name))
+            new_encoding_messages.append((message, False, incoming, peer_username, group_name, False))
         self.messages = new_encoding_messages
 
 # test
@@ -124,11 +127,3 @@ class SecureChain:
 # k.default_pass = 'password'
 # k.add_session_key('user1', 'sessionkey', 'password')
 # k.add_session_key('user2', 'sessionkey', 'password')
-#
-# k.add_message('salam ali jan1', False, False, 'user1')
-# k.add_message('salam ali jan2', False, False, 'user1')
-# k.add_message('salam ali jan3', False, False, 'user1')
-# k.show_all_messages('password', 'new', 'password')
-# print(k.get_session_key('user1', 'supersecretmasterkey'))
-# k.change_password('newpass','supersecretmasterkey')
-# print(k.get_session_key('user1', 'newpass'))

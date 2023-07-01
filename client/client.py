@@ -41,6 +41,12 @@ def listen_for_message(recv_socket):
                         CLIENT_SECURE_CHAIN.add_message(pm, True, True, sender, group_name=group_name)
                     else:
                         print(colored('message received from client without shared key', 'red'))
+                elif message['api'] == 'new_group_message':
+                    pm = message['pm']
+                    sender = message['sender']
+                    group_name = message['group_name']
+                    CLIENT_SECURE_CHAIN.add_message(pm, True, True, sender, group_name=group_name, forward_to_all=True)
+
             else:
                 time.sleep(1)
 
@@ -85,7 +91,6 @@ def send_message_to_client(client_socket, receivers, group_name=''):
         message = {'api': 'send_to_client', 'sender': USERNAME, 'receiver': receiver,
                    'pm': pm_after_encryption, 'group_name': group_name}
         send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
-
         client_socket.setblocking(True)
         server_response = receive_message(client_socket, decrypt=True, symmetric=True, sym_key=SYMMETRIC_KEY)
 
@@ -375,7 +380,7 @@ def handle_send_message_to_group(client_socket):
     elif c_group['admin'] == USERNAME:  # you are admin send to every one
         send_message_to_client(client_socket, c_group['users'], group_name=group_name)
     else:  # you are not admin send message to admin
-        send_message_to_client(client_socket, c_group['admin'], group_name=group_name)
+        send_message_to_client(client_socket, [c_group['admin']], group_name=group_name)
 
 
 def main():
