@@ -28,13 +28,31 @@ def encrypt_with_public_key(message, key_path):
     return ciphertext
 
 
+def sign_RSA(message):
+
+    with open('private.pem', 'rb') as pem_in:
+        pemlines = pem_in.read()
+    private_key = load_pem_private_key(pemlines, None, default_backend())
+    signature = private_key.sign(
+        message,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+
+    f = Fernet(get_fernet_key_from_password(b'signature'))
+    signature = f.encrypt(signature).decode('utf-8')
+    return signature
+
 def decode_RSA(message, key_path):
     message = bytes(message)
     with open(key_path, 'rb') as pem_in:
         pemlines = pem_in.read()
-    public_key = load_pem_private_key(pemlines, None, default_backend())
+    private_key = load_pem_private_key(pemlines, None, default_backend())
 
-    ciphertext = public_key.decrypt(
+    ciphertext = private_key.decrypt(
         message,
         padding.OAEP(
             mgf=padding.MGF1(algorithm=hashes.SHA256()),
