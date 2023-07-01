@@ -19,6 +19,7 @@ PUBLIC_KEY_SERVER = '../public.pem'
 USERNAME = ''
 CLIENT_SECURE_CHAIN = SecureChain()
 DEFAULT_SECURE_CHAIN_PASS = ''
+REFRESH_RATE = 1000  # refresh client and server session key after this many message
 REPLAY_WINDOW = [None for i in range(10)]
 COUNTER = 0
 
@@ -331,7 +332,7 @@ def main():
         elif command == -2:
             print(CLIENT_SECURE_CHAIN.messages)
 
-        if COUNTER > 1000 == 1:
+        if COUNTER > REFRESH_RATE == 1:
             COUNTER = 0
             print(colored('setting new sym key with server', 'cyan'))
             handle_set_sym_key_with_server(client_socket, first_time=False)
