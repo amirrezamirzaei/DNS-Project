@@ -39,7 +39,8 @@ def listen_for_message(recv_socket):
                     group_sender = message['group_sender']
                     if CLIENT_SECURE_CHAIN.have_session_with(sender):
                         print(colored(f'new message from {sender}:', 'yellow'), colored(pm, 'magenta'))
-                        CLIENT_SECURE_CHAIN.add_message(pm, True, True, sender, group_name=group_name, group_sender=group_sender)
+                        CLIENT_SECURE_CHAIN.add_message(pm, True, True, sender, group_name=group_name,
+                                                        group_sender=group_sender)
                     else:
                         print(colored('message received from client without shared key', 'red'))
                 elif message['api'] == 'new_group_message':
@@ -47,7 +48,8 @@ def listen_for_message(recv_socket):
                     sender = message['sender']
                     group_name = message['group_name']
                     print(colored(f'new group message from {sender}:', 'yellow'), colored(pm, 'magenta'))
-                    CLIENT_SECURE_CHAIN.add_message(pm, True, True, sender, group_name=group_name, forward_to_all=True, group_sender=sender)
+                    CLIENT_SECURE_CHAIN.add_message(pm, True, True, sender, group_name=group_name, forward_to_all=True,
+                                                    group_sender=sender)
             else:
                 time.sleep(1)
 
@@ -176,7 +178,7 @@ def handle_login(client_socket):
 
 
 def handle_logout(client_socket):
-    global USERNAME
+    global USERNAME, CLIENT_SECURE_CHAIN, DEFAULT_SECURE_CHAIN_PASS
     if len(USERNAME) == 0:
         print(colored('you are not signed in!', 'red'))
         return
@@ -185,7 +187,8 @@ def handle_logout(client_socket):
 
     print(colored('goodbye', 'green'), colored(f'{USERNAME}!', 'yellow'))
     USERNAME = ''
-
+    CLIENT_SECURE_CHAIN = SecureChain()
+    DEFAULT_SECURE_CHAIN_PASS = ''
 
 def handle_show_online_users(client_socket):
     message = {'api': 'show_online_users'}
@@ -198,6 +201,8 @@ def handle_show_online_users(client_socket):
 def handle_send_message(client_socket):
     print('enter username of the receiver:')
     receiver = input(colored(f'{USERNAME}>', 'yellow'))
+    if receiver == USERNAME:
+        print(colored("can't message yourself", "red"))
     if CLIENT_SECURE_CHAIN.have_session_with(receiver):  # already have key set between two client
         send_message_to_client(client_socket, [receiver])
 

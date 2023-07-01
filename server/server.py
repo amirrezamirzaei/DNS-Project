@@ -9,7 +9,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import dh
 from termcolor import colored
 
-from utils import IP_SERVER, HEADER_LENGTH, PORT_SERVER, get_fernet_key_from_password, encrypt_with_public_key, \
+from utils import IP_SERVER, HEADER_LENGTH, PORT_SERVER, encrypt_with_public_key, \
     decode_RSA
 
 clients = {}  # user : pass, socket, symkey
@@ -51,6 +51,8 @@ def handle_login(message, client_socket, sym_key):
 
 
 def handle_logout(message, client_socket, sym_key):
+    if not authenticate(message['username'], sym_key):
+        return
     if message['username'] in clients and clients[message['username']]['socket'] == client_socket:
         clients[message['username']]['socket'] = None
         clients[message['username']]['key'] = None
@@ -67,6 +69,9 @@ def handle_show_online_users(message, client_socket, sym_key):
 
 
 def handle_key_exchange_with_another_client_p1(message, client_socket, sym_key):
+    if not authenticate(message['sender'], sym_key):
+        return
+
     sender = message['sender']
     receiver = message['receiver']
     if sender not in clients or clients[sender]['socket'] != client_socket:
@@ -92,6 +97,9 @@ def handle_key_exchange_with_another_client_p1(message, client_socket, sym_key):
 
 
 def handle_key_exchange_with_another_client_p2(message, client_socket, sym_key):
+    if not authenticate(message['sender'], sym_key):
+        return
+
     receiver = message['receiver']
     sender = message['sender']
     y = message['y']
@@ -101,6 +109,9 @@ def handle_key_exchange_with_another_client_p2(message, client_socket, sym_key):
 
 
 def handle_send_to_client(message, client_socket, sym_key):
+    if not authenticate(message['sender'], sym_key):
+        return
+
     global group_info
     sender = message['sender']
     receiver = message['receiver']
@@ -118,11 +129,13 @@ def handle_send_to_client(message, client_socket, sym_key):
         return
     # receiver is admin and message is group message
     if group_name and group_name in group_info and group_info[group_name]['admin'] == receiver:
-        message = {'api': 'new_group_message', 'sender': sender, 'pm': pm, 'group_name': group_name, 'group_sender':sender}
+        message = {'api': 'new_group_message', 'sender': sender, 'pm': pm, 'group_name': group_name,
+                   'group_sender': sender}
         send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
                      sym_key=clients[receiver]['key'])
     else:
-        message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm, 'group_name': group_name, 'group_sender':group_sender}
+        message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm, 'group_name': group_name,
+                   'group_sender': group_sender}
         send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
                      sym_key=clients[receiver]['key'])
 
@@ -130,6 +143,9 @@ def handle_send_to_client(message, client_socket, sym_key):
 
 
 def handle_set_sym_key(message, client_socket, sym_key):
+    if not authenticate(message['username'], sym_key):
+        return
+
     global clients
     username = message['username']
     new_key = receive_message(client_socket, print_before_decrypt=True, decrypt=True,
@@ -144,6 +160,9 @@ def handle_set_sym_key(message, client_socket, sym_key):
 
 
 def handle_create_group(message, client_socket, sym_key):
+    if not authenticate(message['username'], sym_key):
+        return
+
     global clients
     global group_info
     admin_username = message['username']
@@ -159,6 +178,9 @@ def handle_create_group(message, client_socket, sym_key):
 
 
 def handle_group_info(message, client_socket, sym_key):
+    if not authenticate(message['username'], sym_key):
+        return
+
     global clients
     global group_info
     username = message['username']
@@ -173,6 +195,9 @@ def handle_group_info(message, client_socket, sym_key):
 
 
 def handle_add_to_group(message, client_socket, sym_key):
+    if not authenticate(message['username'], sym_key):
+        return
+
     global clients
     global group_info
     username_to_add = message['username_to_add']
@@ -197,6 +222,9 @@ def handle_add_to_group(message, client_socket, sym_key):
 
 
 def handle_remove_from_group(message, client_socket, sym_key):
+    if not authenticate(message['username'], sym_key):
+        return
+
     global clients
     global group_info
     username_to_add = message['username_to_add']
@@ -344,6 +372,13 @@ def send_message(socket, message, encrypt=False, key_path='', symmetric=False, s
 
     socket.send(header + message)
 
+
+def authenticate(username, sym_key):
+    global clients
+    if username not in clients or clients[username]['key'] != sym_key:
+        print(colored('authentication error!', 'red'))
+        return False
+    return True
 
 def main():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
