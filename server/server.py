@@ -121,6 +121,20 @@ def handle_send_to_client(message, client_socket, sym_key):
     send_message(client_socket, 'sent.', encrypt=True, symmetric=True, sym_key=sym_key)
 
 
+def handle_set_sym_key(message, client_socket, sym_key):
+    global clients
+    username = message['username']
+    new_key = receive_message(client_socket, print_before_decrypt=True, decrypt=True,
+                              key_path='private.pem', jsonify=True)['key']
+
+    if not new_key:
+        return sym_key
+
+    if username:
+        clients[username]['key'] = new_key
+    return new_key
+
+
 def handle_client(client_socket, client_address):
     global clients
     global client_specific_info
@@ -129,7 +143,9 @@ def handle_client(client_socket, client_address):
 
     # get symmetric key from client
     client_socket.setblocking(True)
-    sym_key = receive_message(client_socket, print_before_decrypt=True, decrypt=True, key_path='private.pem')
+    sym_key = receive_message(client_socket, print_before_decrypt=True, decrypt=True,
+                              key_path='private.pem', jsonify=True)['key']
+
     while True:
         client_socket.setblocking(True)
         message = receive_message(client_socket, print_before_decrypt=True, decrypt=True, symmetric=True,
@@ -153,6 +169,8 @@ def handle_client(client_socket, client_address):
                 handle_key_exchange_with_another_client_p2(message, client_socket, sym_key)
             elif message['api'] == 'send_to_client':
                 handle_send_to_client(message, client_socket, sym_key)
+            elif message['api'] == 'set_sym_key_p1':
+                sym_key = handle_set_sym_key(message, client_socket, sym_key)
 
 
 def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key='',
@@ -174,7 +192,7 @@ def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path=
             timestamp = message.decode('utf-8')[-11:-1]
             counter = int(message.decode('utf-8')[-1])
             hash_message = message.decode('utf-8')[-75:-11]
-            message = message.decode('utf-8')[0:-75].encode('utf-8')
+            message = message.decode('utf-8')[0:-75]
         else:
             f = Fernet(sym_key)
             message = f.decrypt(message).decode('utf-8')
@@ -222,7 +240,7 @@ def send_message(socket, message, encrypt=False, key_path='', symmetric=False, s
     hash.update(message)
     message = message + hash.hexdigest().encode('utf-8')  # add hash
 
-    message = message + f'{int(time.time())}{counter % 10}'.encode('utf-8') # add replay attack checker
+    message = message + f'{int(time.time())}{counter % 10}'.encode('utf-8')  # add replay attack checker
     client_specific_info[socket][0] += 1
 
     if encrypt and not symmetric:

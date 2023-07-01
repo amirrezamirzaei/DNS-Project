@@ -94,6 +94,23 @@ def send_message_to_client(client_socket, receiver):
         return
 
 
+def handle_set_sym_key_with_server(client_socket, first_time=False):
+    global SYMMETRIC_KEY
+    global USERNAME
+
+    if first_time:
+        SYMMETRIC_KEY = Fernet.generate_key()
+        message = {'api': 'set_sym_key', 'key': SYMMETRIC_KEY.decode('utf-8'), 'username': USERNAME}
+        send_message(client_socket, str(message), symmetric=False, encrypt=True, key_path=PUBLIC_KEY_SERVER)
+    else:
+        new_key = Fernet.generate_key()
+        message = {'api': 'set_sym_key_p1', 'username': USERNAME}
+        send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
+        message = {'api': 'set_sym_key_p2', 'key': new_key.decode('utf-8'), 'username': USERNAME}
+        send_message(client_socket, str(message), symmetric=False, encrypt=True, key_path=PUBLIC_KEY_SERVER)
+        SYMMETRIC_KEY = new_key
+
+
 def handle_signup(client_socket):
     username = input('enter your desired username:')
     message = {'api': 'signup_username', 'username': username}
@@ -240,6 +257,7 @@ def main():
     global LISTEN
     global SYMMETRIC_KEY
     global CLIENT_SECURE_CHAIN
+    global COUNTER
 
     client_socket = socket.socket()
     try:
@@ -250,8 +268,7 @@ def main():
     print('connection established.')
     client_socket.setblocking(True)
     # generate symmetric key for server
-    SYMMETRIC_KEY = Fernet.generate_key()
-    send_message(client_socket, SYMMETRIC_KEY, symmetric=False, encrypt=True, key_path=PUBLIC_KEY_SERVER)
+    handle_set_sym_key_with_server(client_socket, first_time=True)
 
     _thread.start_new_thread(listen_for_message, (client_socket,))
 
@@ -313,6 +330,11 @@ def main():
             print(CLIENT_SECURE_CHAIN.session_keys)
         elif command == -2:
             print(CLIENT_SECURE_CHAIN.messages)
+
+        if COUNTER > 1000 == 1:
+            COUNTER = 0
+            print(colored('setting new sym key with server', 'cyan'))
+            handle_set_sym_key_with_server(client_socket, first_time=False)
 
 
 def receive_message(socket, print_before_decrypt=False, decrypt=False, key_path='', symmetric=False, sym_key='',
