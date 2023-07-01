@@ -8,7 +8,7 @@ from utils import get_fernet_key_from_password
 class SecureChain:
     def __init__(self):
         self.session_keys = {}
-        self.messages = []  # (message, is_encrypted_with_session_key, incoming, peer_username, group_name)
+        self.messages = []  # (message, is_encrypted_with_session_key, incoming, peer_username, group_name, group_sender)
         self.default_pass = ''
 
     def add_session_key(self, peer_username, key, master_pass):
@@ -64,7 +64,7 @@ class SecureChain:
         for peer_username, key in keys.items():
             self.add_session_key(peer_username, key, password)
 
-    def add_message(self, message, is_encrypted_with_session_key, incoming, peer_username, group_name='', forward_to_all=False):
+    def add_message(self, message, is_encrypted_with_session_key, incoming, peer_username, group_name='', forward_to_all=False, group_sender=''):
         # encode message
         if type(message) == str:
             message = message.encode('utf-8')
@@ -73,12 +73,13 @@ class SecureChain:
         message = f.encrypt(message)
 
         self.messages.append(
-            (message, is_encrypted_with_session_key, incoming, peer_username, group_name, forward_to_all))
+            (message, is_encrypted_with_session_key, incoming, peer_username, group_name, forward_to_all, group_sender))
 
     def show_all_messages(self, message_old_password, message_new_password, keychain_pass):
+        forwarding_messages = []
         new_encoding_messages = []
         for i in range(len(self.messages)):
-            message, is_encrypted_with_session_key, incoming, peer_username, group_name, forward_to_all = self.messages[i]
+            message, is_encrypted_with_session_key, incoming, peer_username, group_name, forward_to_all, group_sender = self.messages[i]
             flag = False
             for password in [message_old_password, self.default_pass]:
                 f = Fernet(get_fernet_key_from_password(password.encode('utf-8')))
@@ -108,8 +109,10 @@ class SecureChain:
                 print(colored(f'received from {peer_username}:', 'yellow'),
                       colored(f'{message.decode("utf-8")}', 'magenta'))
             elif incoming and group_name:
-                print(colored(f'{group_name}:', 'red'), colored(f'received from {peer_username}:', 'yellow'),
+                print(colored(f'{group_name}:', 'red'), colored(f'received from {group_sender}:', 'yellow'),
                       colored(f'{message.decode("utf-8")}', 'magenta'))
+                if forward_to_all:
+                    forwarding_messages.append((message, peer_username, group_name))
             elif not incoming and not group_name:
                 print(colored(f'sent to {peer_username}:', 'yellow'), colored(f'{message.decode("utf-8")}', 'magenta'))
             else:
@@ -119,8 +122,10 @@ class SecureChain:
             f = Fernet(get_fernet_key_from_password(message_new_password.encode('utf-8')))
             message = f.encrypt(message)
 
-            new_encoding_messages.append((message, False, incoming, peer_username, group_name, False))
+            new_encoding_messages.append((message, False, incoming, peer_username, group_name, False,group_sender))
         self.messages = new_encoding_messages
+
+        return forwarding_messages
 
 # test
 # k = KeyChain()

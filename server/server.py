@@ -106,6 +106,7 @@ def handle_send_to_client(message, client_socket, sym_key):
     receiver = message['receiver']
     pm = message['pm']
     group_name = message['group_name']
+    group_sender = message['group_sender']
     if sender not in clients or clients[sender]['socket'] != client_socket:
         send_message(client_socket, 'you are not logged in.', encrypt=True, symmetric=True, sym_key=sym_key)
         return
@@ -117,11 +118,11 @@ def handle_send_to_client(message, client_socket, sym_key):
         return
     # receiver is admin and message is group message
     if group_name and group_name in group_info and group_info[group_name]['admin'] == receiver:
-        message = {'api': 'new_group_message', 'sender': sender, 'pm': pm, 'group_name': group_name}
+        message = {'api': 'new_group_message', 'sender': sender, 'pm': pm, 'group_name': group_name, 'group_sender':sender}
         send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
                      sym_key=clients[receiver]['key'])
     else:
-        message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm, 'group_name': group_name}
+        message = {'api': 'new_message_from_client', 'sender': sender, 'pm': pm, 'group_name': group_name, 'group_sender':group_sender}
         send_message(clients[receiver]['socket'], str(message), encrypt=True, symmetric=True,
                      sym_key=clients[receiver]['key'])
 
