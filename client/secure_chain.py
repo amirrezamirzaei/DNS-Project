@@ -116,13 +116,13 @@ class SecureChain:
             elif not incoming and not group_name:
                 print(colored(f'sent to {peer_username}:', 'yellow'), colored(f'{message.decode("utf-8")}', 'magenta'))
             else:
-                print(colored(f'{group_name}:', 'red'), colored(f'sent to {peer_username}:', 'yellow'),
+                print(colored(f'sent to {group_name}:', 'red'),
                       colored(f'{message.decode("utf-8")}', 'magenta'))
 
             f = Fernet(get_fernet_key_from_password(message_new_password.encode('utf-8')))
             message = f.encrypt(message)
 
-            new_encoding_messages.append((message, False, incoming, peer_username, group_name, False,group_sender))
+            new_encoding_messages.append((message, False, incoming, peer_username, group_name, False, group_sender))
         self.messages = new_encoding_messages
 
         return forwarding_messages

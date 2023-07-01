@@ -100,7 +100,7 @@ def send_message_to_client(client_socket, receivers, group_name='', save_message
             print(colored(server_response, 'red'))
         if server_response == 'sent.':
             if save_message:
-                CLIENT_SECURE_CHAIN.add_message(pm, False, False, USERNAME, group_name=group_name)
+                CLIENT_SECURE_CHAIN.add_message(pm, False, False, receiver, group_name=group_name)
             print(colored(f'sent to {receiver}', 'green'))
 
 
@@ -179,6 +179,7 @@ def handle_logout(client_socket):
     global USERNAME
     if len(USERNAME) == 0:
         print(colored('you are not signed in!', 'red'))
+        return
     message = {'api': 'logout', 'username': USERNAME}
     send_message(client_socket, str(message), encrypt=True, sym_key=SYMMETRIC_KEY, symmetric=True)
 
@@ -233,7 +234,8 @@ def handle_message_history(client_socket):
     print('enter new password for your message list:')
     new_pass = input(colored(f'{USERNAME}>', 'yellow'))
     forwarding = CLIENT_SECURE_CHAIN.show_all_messages(old_pass, new_pass, keychain_pass)
-
+    if not forwarding:
+        return
     for f in forwarding:
         pm, sender, group_name = f
         groups_info = handle_group_info(client_socket, show_info=False)
